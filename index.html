@@ -1,3 +1,4 @@
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Processador de Pedidos iFood</title>
@@ -151,7 +152,7 @@ body {
 }
 
 .btn-copy:hover {
-    background-color: '#0d261c';
+    background-color: #0d261c;
 }
 
 .btn-success {
@@ -160,7 +161,7 @@ body {
 }
 
 .btn-success:hover {
-    background-color: '#218838';
+    background-color: #218838;
 }
 
 /* Pré-visualização compacta */
@@ -419,6 +420,7 @@ h2 {
             2. <strong>Desconto Simples:</strong> Apenas valor numérico (ex: 10,00)<br />
             3. <strong>Endereço Corrigido:</strong> Funciona para ambas as lojas<br />
             4. <strong>Verificação:</strong> Confere valores recebidos do iFood<br />
+            5. <strong>Horário Entrega:</strong> Formato "11:50 às 12:50" automático<br />
         </div>
         
         <textarea class="converter-textarea" id="inputData" placeholder="Cole aqui todo o conteúdo do pedido do iFood..."></textarea>
@@ -523,6 +525,54 @@ function getWeekdayName(dateStr) {
     const [day, month, year] = dateStr.split('/').map(Number);
     const date = new Date(year, month - 1, day);
     return days[date.getDay()];
+}
+
+// ============================================
+// FUNÇÃO PARA AJUSTAR HORÁRIO DE ENTREGA
+// ============================================
+
+function adjustDeliveryTime(deliveryTime) {
+    if (!deliveryTime || deliveryTime.trim() === '') {
+        return '';
+    }
+    
+    try {
+        // Remove espaços e formata para HH:MM
+        const time = deliveryTime.trim().replace(/\s/g, '');
+        
+        // Verifica se já está no formato "HH:MM às HH:MM"
+        if (time.includes('às')) {
+            return deliveryTime; // Já está formatado
+        }
+        
+        // Verifica se tem formato HH:MM
+        if (!time.match(/^\d{1,2}:\d{2}$/)) {
+            return deliveryTime;
+        }
+        
+        // Divide horas e minutos
+        const [hours, minutes] = time.split(':').map(Number);
+        
+        // Subtrai 1 hora
+        let newHour = hours - 1;
+        
+        // Ajusta se passar da meia-noite
+        if (newHour < 0) {
+            newHour = 23; // Volta para 23:xx do dia anterior
+        }
+        
+        // Formata a hora anterior com 2 dígitos
+        const previousHour = newHour.toString().padStart(2, '0');
+        const formattedMinutes = minutes.toString().padStart(2, '0');
+        const currentHour = hours.toString().padStart(2, '0');
+        
+        // Cria o formato "HH:MM às HH:MM"
+        return `${previousHour}:${formattedMinutes} às ${currentHour}:${formattedMinutes}`;
+        
+    } catch (error) {
+        console.error('Erro ao ajustar horário de entrega:', error);
+        return deliveryTime;
+    }
 }
 
 // ============================================
@@ -913,7 +963,8 @@ function processData() {
         const customerPhone = extractCustomerPhone(input);
         const storeName = extractStoreName(input); // <-- AGORA DETECTA AMBAS AS LOJAS
         const orderTime = extractOrderTime(input);
-        const deliveryTime = extractDeliveryTime(input);
+        const rawDeliveryTime = extractDeliveryTime(input);
+        const formattedDeliveryTime = adjustDeliveryTime(rawDeliveryTime); // <-- FORMATA HORÁRIO
         const giftedInfo = extractGiftedInfo(input);
         const address = extractAddress(input);
         const productInfo = extractProducts(input);
@@ -949,7 +1000,7 @@ function processData() {
             
             // Entrega
             deliveryDate: deliveryDate,
-            deliveryTime: deliveryTime,
+            deliveryTime: formattedDeliveryTime, // <-- USA HORÁRIO FORMATADO
             
             // Presenteado
             giftedPhone: giftedInfo.phone,
@@ -1018,7 +1069,7 @@ function processData() {
         // COLUNA P: Data de Entrega (data atual + dia da semana)
         excelColumns[15] = result.deliveryDate;
         
-        // COLUNA Q: Horário de Entrega
+        // COLUNA Q: Horário de Entrega (FORMATADO: "11:50 às 12:50")
         excelColumns[16] = result.deliveryTime;
         
         // COLUNA R: Tem Cartão?
@@ -1122,7 +1173,7 @@ function showPreview(result, productInfo, shippingInfo, totalReceived, validatio
                 <span class="finance-label">🚚 Taxa Entrega:</span>
                 <span class="finance-value">R$ ${result.deliveryFee}</span>
             </div>
-            <div class"finance-item">
+            <div class="finance-item">
                 <span class="finance-label">💼 Taxa Serviço:</span>
                 <span class="finance-value">R$ ${result.serviceFee}</span>
             </div>
@@ -1181,12 +1232,12 @@ function showPreview(result, productInfo, shippingInfo, totalReceived, validatio
         `;
     }
     
-    // Entrega
+    // Entrega - AGORA MOSTRA HORÁRIO FORMATADO
     if (result.deliveryTime) {
         previewHTML += `
             <div class="preview-item">
                 <div class="preview-label">⏰ Horário Entrega:</div>
-                <div class="preview-value">${result.deliveryTime}</div>
+                <div class="preview-value"><strong>${result.deliveryTime}</strong></div>
             </div>
         `;
     }
@@ -1427,7 +1478,7 @@ function enviarDadosViaJSONP() {
                     }
                     reject(new Error('Timeout na requisição JSONP'));
                 }
-            }, 10000);
+            }, 15000);
             
         } catch (error) {
             console.error('❌ Erro no JSONP:', error);
